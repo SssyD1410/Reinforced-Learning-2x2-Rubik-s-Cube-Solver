@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Watch Agent Solves Cube</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #101114;
+    --panel: #17181d;
+    --panel-2: #1e2027;
+    --border: #2b2e37;
+    --text: #e7e8ec;
+    --text-dim: #8d919c;
+    --accent: #6ee7c9;
+    --accent-dim: #3fa98a;
+    --warn: #f0a24a;
+    --bad: #e8697a;
+    --good: #6ee7c9;
+    --radius: 10px;
+    color-scheme: dark;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    box-sizing: border-box;
+  }
+  :root[data-theme="light"], :root:not([data-theme="dark"]) {
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f4f4f2;
+      --panel: #ffffff;
+      --panel-2: #edeeec;
+      --border: #dcdde0;
+      --text: #16171a;
+      --text-dim: #63676f;
+      --accent: #0f9d78;
+      --accent-dim: #0c7d60;
+      --warn: #b3690f;
+      --bad: #c23b52;
+      --good: #0f9d78;
+      color-scheme: light;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #f4f4f2;
+    --panel: #ffffff;
+    --panel-2: #edeeec;
+    --border: #dcdde0;
+    --text: #16171a;
+    --text-dim: #63676f;
+    --accent: #0f9d78;
+    --accent-dim: #0c7d60;
+    --warn: #b3690f;
+    --bad: #c23b52;
+    --good: #0f9d78;
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    margin: 0;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100%;
+    padding: 28px 18px 40px;
+  }
+
+  .wrap {
+    width: 100%;
+    max-width: 920px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  h1 {
+    font-size: 1.35rem;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  h1 span { color: var(--text-dim); font-weight: 500; }
+  .sub {
+    color: var(--text-dim);
+    font-size: 0.92rem;
+    margin: 4px 0 0;
+    max-width: 46ch;
+    line-height: 1.5;
+  }
+
+  .stage {
+    display: grid;
+    grid-template-columns: 1fr 250px;
+    gap: 16px;
+  }
+  @media (max-width: 700px) {
+    .stage { grid-template-columns: 1fr; }
+  }
+
+  .canvas-card {
+    background: radial-gradient(120% 130% at 50% 0%, var(--panel-2), var(--panel));
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    position: relative;
+    overflow: hidden;
+    aspect-ratio: 1 / 1;
+    min-height: 320px;
+    touch-action: none;
+    cursor: grab;
+  }
+  .canvas-card:active { cursor: grabbing; }
+  .canvas-card canvas { display: block; width: 100%; height: 100%; }
+
+  .status-overlay {
+    position: absolute;
+    left: 14px;
+    top: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    line-height: 1.6;
+    pointer-events: none;
+  }
+  .status-overlay .status-line {
+    color: var(--text);
+    font-weight: 500;
+  }
+  .status-overlay .status-line.good { color: var(--good); }
+  .status-overlay .status-line.bad { color: var(--bad); }
+  .status-overlay .status-line.busy { color: var(--warn); }
+
+  .side {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+  }
+  .panel h2 {
+    font-size: 0.7rem;
+    text-transform: none;
+    letter-spacing: 0.01em;
+    color: var(--text-dim);
+    margin: 0 0 10px;
+    font-weight: 500;
+  }
+
+  button#actionBtn {
+    width: 100%;
+    padding: 12px 16px;
+    border-radius: 8px;
+    border: none;
+    background: var(--accent);
+    color: #08110d;
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: transform 0.08s ease, background 0.15s ease;
+  }
+  button#actionBtn:hover:not(:disabled) { background: var(--accent-dim); color: #eafff8; }
+  button#actionBtn:active:not(:disabled) { transform: scale(0.98); }
+  button#actionBtn:disabled { opacity: 0.5; cursor: default; }
+
+  .progress-track {
+    width: 100%;
+    height: 6px;
+    border-radius: 4px;
+    background: var(--panel-2);
+    overflow: hidden;
+    margin-top: 10px;
+  }
+  .progress-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--accent);
+    transition: width 0.2s ease;
+  }
+
+  table.depth-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.76rem;
+  }
+  table.depth-table td {
+    padding: 3px 0;
+    color: var(--text-dim);
+    border-bottom: 1px dashed var(--border);
+  }
+  table.depth-table td:last-child { text-align: right; color: var(--text); }
+  table.depth-table tr:last-child td { border-bottom: none; }
+  table.depth-table tr.current td { color: var(--accent); }
+
+  .move-log {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.76rem;
+    color: var(--text-dim);
+    line-height: 1.7;
+    max-height: 90px;
+    overflow-y: auto;
+  }
+  .move-log span.tag {
+    display: inline-block;
+    min-width: 34px;
+    color: var(--text);
+  }
+
+  footer {
+    color: var(--text-dim);
+    font-size: 0.76rem;
+    text-align: center;
+    line-height: 1.6;
+  }
+  footer a { color: var(--text-dim); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>2x2 cube <span>— watch the agent solve it</span></h1>
+      <p class="sub">A tabular Q-learning agent trains itself in your browser, then attempts to solve a freshly scrambled cube, one move at a time.</p>
+    </div>
+  </header>
+
+  <div class="stage">
+    <div class="canvas-card" id="canvasCard">
+      <div class="status-overlay" id="statusOverlay">
+        <div>depth <span id="depthLabel">8</span></div>
+        <div class="status-line" id="statusLine">training agent…</div>
+        <div id="stepLine"></div>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="panel">
+        <h2>run</h2>
+        <button id="actionBtn" disabled>Training…</button>
+        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      </div>
+
+      <div class="panel">
+        <h2>training result by depth</h2>
+        <table class="depth-table" id="depthTable"></table>
+      </div>
+
+      <div class="panel">
+        <h2>moves this run</h2>
+        <div class="move-log" id="moveLog">—</div>
+      </div>
+    </div>
+  </div>
+
+  <footer>Drag the cube to rotate the view. Training happens once per page load, entirely in your browser.</footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+"use strict";
+
+const canvasCard = document.getElementById('canvasCard');
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+camera.position.set(3.4, 3.0, 4.2);
+camera.lookAt(0,0,0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+canvasCard.appendChild(renderer.domElement);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+const key1 = new THREE.DirectionalLight(0xffffff, 0.55);
+key1.position.set(5,6,4); scene.add(key1);
+const key2 = new THREE.DirectionalLight(0xffffff, 0.25);
+key2.position.set(-4,-2,-5); scene.add(key2);
+
+const cubeGroup = new THREE.Group();
+scene.add(cubeGroup);
+cubeGroup.rotation.x = -0.5;
+cubeGroup.rotation.y = 0.7;
+
+const STICKER_COLORS = { U:0xf3f4f2, D:0xf4c73a, R:0xd8432f, L:0xf07f1c, F:0x3fae57, B:0x3f6fd8 };
+const PLASTIC = 0x111318;
+const SPACING = 0.515;
+const CUBIE_SIZE = 0.94;
+
+const cubieMeshes = [];
+function buildCube(){
+  cubeGroup.clear();
+  cubieMeshes.length = 0;
+  const geo = new THREE.BoxGeometry(CUBIE_SIZE, CUBIE_SIZE, CUBIE_SIZE);
+  for (const x of [-1,1]) for (const y of [-1,1]) for (const z of [-1,1]){
+    // material order for BoxGeometry: [+x, -x, +y, -y, +z, -z]
+    const mats = [
+      new THREE.MeshStandardMaterial({ color: x>0? STICKER_COLORS.R: PLASTIC, roughness:0.5, metalness:0.05 }),
+      new THREE.MeshStandardMaterial({ color: x<0? STICKER_COLORS.L: PLASTIC, roughness:0.5, metalness:0.05 }),
+      new THREE.MeshStandardMaterial({ color: y>0? STICKER_COLORS.U: PLASTIC, roughness:0.5, metalness:0.05 }),
+      new THREE.MeshStandardMaterial({ color: y<0? STICKER_COLORS.D: PLASTIC, roughness:0.5, metalness:0.05 }),
+      new THREE.MeshStandardMaterial({ color: z>0? STICKER_COLORS.F: PLASTIC, roughness:0.5, metalness:0.05 }),
+      new THREE.MeshStandardMaterial({ color: z<0? STICKER_COLORS.B: PLASTIC, roughness:0.5, metalness:0.05 }),
+    ];
+    const mesh = new THREE.Mesh(geo, mats);
+    mesh.position.set(x*SPACING, y*SPACING, z*SPACING);
+    mesh.userData.pos = [x,y,z];
+    cubeGroup.add(mesh);
+    cubieMeshes.push(mesh);
+  }
+}
+buildCube();
+
+function resizeRenderer(){
+  const w = canvasCard.clientWidth, h = canvasCard.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w/h;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resizeRenderer).observe(canvasCard);
+resizeRenderer();
+
+function render(){ renderer.render(scene, camera); requestAnimationFrame(render); }
+render();
+
+// drag to orbit the view
+let dragging=false, lastX=0, lastY=0;
+canvasCard.addEventListener('pointerdown', e=>{ dragging=true; lastX=e.clientX; lastY=e.clientY; canvasCard.setPointerCapture(e.pointerId); });
+canvasCard.addEventListener('pointerup', ()=> dragging=false);
+canvasCard.addEventListener('pointercancel', ()=> dragging=false);
+canvasCard.addEventListener('pointermove', e=>{
+  if (!dragging) return;
+  const dx = e.clientX-lastX, dy = e.clientY-lastY;
+  cubeGroup.rotation.y += dx*0.008;
+  cubeGroup.rotation.x += dy*0.008;
+  lastX=e.clientX; lastY=e.clientY;
+});
+
+const AXIS_OF_FACE = {
+  U: 'y',
+  D: 'y',
+  R: 'x',
+  L: 'x',
+  F: 'z',
+  B: 'z'
+};
+
+const LAYER_VALUE_OF_FACE = {
+  U: 1,
+  D: -1,
+  R: 1,
+  L: -1,
+  F: 1,
+  B: -1
+};
+
+const AXIS_IDX = {
+  x: 0,
+  y: 1,
+  z: 2
+};
+
+function rotateVec(v, axis, sign) {
+  const [x, y, z] = v;
+
+  if (axis === 'x') {
+    return sign === 1
+      ? [x, -z, y]
+      : [x, z, -y];
+  }
+
+  if (axis === 'y') {
+    return sign === 1
+      ? [z, y, -x]
+      : [-z, y, x];
+  }
+
+  // z axis
+  return sign === 1
+    ? [-y, x, z]
+    : [y, -x, z];
+}
+// animate a face turn visually; returns a Promise that resolves when done
+function rotateLayerVisual(face, clockwise, duration){
+  return new Promise(resolve=>{
+    const axis = AXIS_OF_FACE[face];
+    const layerVal = LAYER_VALUE_OF_FACE[face];
+    const axisIdx = AXIS_IDX[axis];
+    const effSign = (clockwise?1:-1) * layerVal;
+    const targetAngle = effSign * Math.PI/2;
+
+    const pivot = new THREE.Group();
+    cubeGroup.add(pivot);
+    const layerMeshes = cubieMeshes.filter(m => m.userData.pos[axisIdx]===layerVal);
+    layerMeshes.forEach(m => pivot.attach(m));
+
+    const axisVec = axis==='x'? new THREE.Vector3(1,0,0) : axis==='y'? new THREE.Vector3(0,1,0) : new THREE.Vector3(0,0,1);
+    const start = performance.now();
+    function tick(now){
+      const t = Math.min(1, (now-start)/duration);
+      const eased = t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2; // ease-in-out
+      pivot.setRotationFromAxisAngle(axisVec, eased*targetAngle);
+      if (t<1) requestAnimationFrame(tick);
+      else {
+        layerMeshes.forEach(m=>{
+          cubeGroup.attach(m);
+          m.userData.pos = rotateVec(m.userData.pos, axis, effSign).map(v=>Math.round(v));
+        });
+        cubeGroup.remove(pivot);
+        resolve();
+      }
+    }
+    requestAnimationFrame(tick);
+  });
+}
+
+const actionBtn = document.getElementById('actionBtn');
+const progressFill = document.getElementById('progressFill');
+const statusLine = document.getElementById('statusLine');
+const stepLine = document.getElementById('stepLine');
+const moveLog = document.getElementById('moveLog');
+const depthLabel = document.getElementById('depthLabel');
+
+depthLabel.textContent = '8';
+
+function setStatus(text, kind) {
+  statusLine.textContent = text;
+  statusLine.className =
+    'status-line' + (kind ? ' ' + kind : '');
+}
+
+let busy = false;
+
+async function runFromJSON() {
+  if (busy) return;
+
+  busy = true;
+  actionBtn.disabled = true;
+  actionBtn.textContent = 'Running…';
+  moveLog.innerHTML = '';
+  progressFill.style.width = '0%';
+
+  // Reset the visual cube
+  buildCube();
+
+  try {
+    const response = await fetch('solution.json');
+
+    if (!response.ok) {
+      throw new Error(
+        `Could not load solution.json (${response.status})`
+      );
+    }
+
+    const data = await response.json();
+
+    console.log('Loaded JSON:', data);
+    console.log('Scramble:', data.scramble_moves);
+    console.log('Solution:', data.solution_moves);
+
+
+    setStatus('scrambling…', 'busy');
+    stepLine.textContent = '';
+
+    for (const move of data.scramble_moves) {
+
+      const face = move[0];
+      const clockwise = !move.endsWith("'");
+
+      console.log('Scramble move:', face, clockwise);
+
+      await rotateLayerVisual(
+        face,
+        clockwise,
+        220
+      );
+    }
+
+
+    setStatus('agent solving…', 'busy');
+
+    const solution = data.solution_moves;
+    const totalSteps = solution.length;
+
+    const logLines = [];
+
+    for (let i = 0; i < totalSteps; i++) {
+
+      const move = solution[i];
+
+      const face = move[0];
+      const clockwise = !move.endsWith("'");
+
+      const step = i + 1;
+
+      stepLine.textContent =
+        `step ${step} / ${totalSteps}`;
+
+      // Update move log
+      logLines.push(
+        `<span class="tag">#${step}</span>${move}`
+      );
+
+      moveLog.innerHTML = logLines.join('<br>');
+      moveLog.scrollTop = moveLog.scrollHeight;
+
+
+      progressFill.style.width =
+        `${(step / totalSteps) * 100}%`;
+
+      console.log('Solution move:', move);
+
+      await rotateLayerVisual(
+        face,
+        clockwise,
+        500
+      );
+    }
+
+    setStatus(
+      `solved in ${totalSteps} moves`,
+      'good'
+    );
+
+    stepLine.textContent = '';
+
+  } catch (error) {
+
+    console.error('Visualizer error:', error);
+
+    setStatus(
+      'error loading solution',
+      'bad'
+    );
+
+    stepLine.textContent = error.message;
+
+  } finally {
+
+    busy = false;
+    actionBtn.disabled = false;
+    actionBtn.textContent = 'Try again';
+  }
+}
+
+actionBtn.addEventListener(
+  'click',
+  runFromJSON
+);
+
+
+
+})();
+</script>
+</body>
+</html>
