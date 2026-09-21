@@ -9,6 +9,14 @@ This project aims to solve a 2x2 Rubik's cube through RL, specifically using tab
 
 **`q_learning_2x2.py`** — Tabular Q-learning on the 2x2 cube.
 
+**`server.py`** — a local HTTP server. Loads (or trains) the agent on
+  startup.
+- **`cube_visualizer_local.html`** — the 3D page. Fetches from the endpoints
+  above; contains no training code.
+- **`run.py`** — starts the server and opens the page in the browser
+  automatically. 
+
+
 ## For higher success rate
 There are few ways to increase success rate, but it takes longer time and/or bigger space to train:
 **In the `q_learning_2x2.py` file**

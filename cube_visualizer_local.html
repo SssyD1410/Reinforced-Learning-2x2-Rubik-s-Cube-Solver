@@ -26,9 +26,6 @@
     padding-bottom: env(safe-area-inset-bottom, 0px);
     box-sizing: border-box;
   }
-  :root[data-theme="light"], :root:not([data-theme="dark"]) {
-  }
-
   @media (prefers-color-scheme: light) {
     :root:not([data-theme="dark"]) {
       --bg: #f4f4f2;
@@ -283,6 +280,7 @@
 (function(){
 "use strict";
 
+
 const canvasCard = document.getElementById('canvasCard');
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
@@ -315,7 +313,6 @@ function buildCube(){
   cubieMeshes.length = 0;
   const geo = new THREE.BoxGeometry(CUBIE_SIZE, CUBIE_SIZE, CUBIE_SIZE);
   for (const x of [-1,1]) for (const y of [-1,1]) for (const z of [-1,1]){
-    // material order for BoxGeometry: [+x, -x, +y, -y, +z, -z]
     const mats = [
       new THREE.MeshStandardMaterial({ color: x>0? STICKER_COLORS.R: PLASTIC, roughness:0.5, metalness:0.05 }),
       new THREE.MeshStandardMaterial({ color: x<0? STICKER_COLORS.L: PLASTIC, roughness:0.5, metalness:0.05 }),
@@ -341,11 +338,9 @@ function resizeRenderer(){
 }
 new ResizeObserver(resizeRenderer).observe(canvasCard);
 resizeRenderer();
-
 function render(){ renderer.render(scene, camera); requestAnimationFrame(render); }
 render();
 
-// drag to orbit the view
 let dragging=false, lastX=0, lastY=0;
 canvasCard.addEventListener('pointerdown', e=>{ dragging=true; lastX=e.clientX; lastY=e.clientY; canvasCard.setPointerCapture(e.pointerId); });
 canvasCard.addEventListener('pointerup', ()=> dragging=false);
@@ -358,51 +353,17 @@ canvasCard.addEventListener('pointermove', e=>{
   lastX=e.clientX; lastY=e.clientY;
 });
 
-const AXIS_OF_FACE = {
-  U: 'y',
-  D: 'y',
-  R: 'x',
-  L: 'x',
-  F: 'z',
-  B: 'z'
-};
+const AXIS_OF_FACE = {U:'y',D:'y',R:'x',L:'x',F:'z',B:'z'};
+const LAYER_VALUE_OF_FACE = {U:1,D:-1,R:1,L:-1,F:1,B:-1};
+const AXIS_IDX = {x:0,y:1,z:2};
 
-const LAYER_VALUE_OF_FACE = {
-  U: 1,
-  D: -1,
-  R: 1,
-  L: -1,
-  F: 1,
-  B: -1
-};
-
-const AXIS_IDX = {
-  x: 0,
-  y: 1,
-  z: 2
-};
-
-function rotateVec(v, axis, sign) {
-  const [x, y, z] = v;
-
-  if (axis === 'x') {
-    return sign === 1
-      ? [x, -z, y]
-      : [x, z, -y];
-  }
-
-  if (axis === 'y') {
-    return sign === 1
-      ? [z, y, -x]
-      : [-z, y, x];
-  }
-
-  // z axis
-  return sign === 1
-    ? [-y, x, z]
-    : [y, -x, z];
+function rotateVec(v, axis, sign){
+  const [x,y,z] = v;
+  if (axis==='x') return sign===1 ? [x,-z,y] : [x,z,-y];
+  if (axis==='y') return sign===1 ? [z,y,-x] : [-z,y,x];
+  return sign===1 ? [-y,x,z] : [y,-x,z];
 }
-// animate a face turn visually; returns a Promise that resolves when done
+
 function rotateLayerVisual(face, clockwise, duration){
   return new Promise(resolve=>{
     const axis = AXIS_OF_FACE[face];
@@ -420,7 +381,7 @@ function rotateLayerVisual(face, clockwise, duration){
     const start = performance.now();
     function tick(now){
       const t = Math.min(1, (now-start)/duration);
-      const eased = t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2; // ease-in-out
+      const eased = t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2;
       pivot.setRotationFromAxisAngle(axisVec, eased*targetAngle);
       if (t<1) requestAnimationFrame(tick);
       else {
@@ -436,141 +397,137 @@ function rotateLayerVisual(face, clockwise, duration){
   });
 }
 
-const actionBtn = document.getElementById('actionBtn');
+/* ---- UI wiring: everything below talks to the local Python server ---- */
+const solveBtn = document.getElementById('solveBtn');
+const retrainBtn = document.getElementById('retrainBtn');
 const progressFill = document.getElementById('progressFill');
 const statusLine = document.getElementById('statusLine');
 const stepLine = document.getElementById('stepLine');
 const moveLog = document.getElementById('moveLog');
+const depthTable = document.getElementById('depthTable');
 const depthLabel = document.getElementById('depthLabel');
 
-depthLabel.textContent = '8';
-
-function setStatus(text, kind) {
+function setStatus(text, kind){
   statusLine.textContent = text;
-  statusLine.className =
-    'status-line' + (kind ? ' ' + kind : '');
+  statusLine.className = 'status-line' + (kind ? ' '+kind : '');
+}
+
+function renderDepthTable(depthResults){
+  const rows = Object.keys(depthResults).sort((a,b)=>a-b).map(d=>{
+    const r = depthResults[d];
+    return `<tr><td>depth ${d}</td><td>${(r.rate*100).toFixed(0)}%</td></tr>`;
+  });
+  depthTable.innerHTML = rows.length ? rows.join('') : '<tr><td>no data yet</td><td></td></tr>';
+}
+
+async function refreshStatus(){
+  const res = await fetch('/status');
+  const data = await res.json();
+  renderDepthTable(data.depth_results || {});
+  return data;
 }
 
 let busy = false;
 
-async function runFromJSON() {
+async function runSolve(){
   if (busy) return;
-
   busy = true;
-  actionBtn.disabled = true;
-  actionBtn.textContent = 'Running…';
+  solveBtn.disabled = true; retrainBtn.disabled = true;
+  solveBtn.textContent = 'Solving…';
   moveLog.innerHTML = '';
   progressFill.style.width = '0%';
-
-  // Reset the visual cube
   buildCube();
 
   try {
-    const response = await fetch('solution.json');
-
-    if (!response.ok) {
-      throw new Error(
-        `Could not load solution.json (${response.status})`
-      );
-    }
-
-    const data = await response.json();
-
-    console.log('Loaded JSON:', data);
-    console.log('Scramble:', data.scramble_moves);
-    console.log('Solution:', data.solution_moves);
-
-
     setStatus('scrambling…', 'busy');
     stepLine.textContent = '';
 
-    for (const move of data.scramble_moves) {
+    const res = await fetch('/solve', { method: 'POST' });
+    if (!res.ok) throw new Error('server error ' + res.status);
+    const data = await res.json();
+    depthLabel.textContent = data.depth;
 
-      const face = move[0];
-      const clockwise = !move.endsWith("'");
-
-      console.log('Scramble move:', face, clockwise);
-
-      await rotateLayerVisual(
-        face,
-        clockwise,
-        220
-      );
+    for (const move of data.scramble_moves){
+      const face = move[0], cw = !move.endsWith("'");
+      await rotateLayerVisual(face, cw, 220);
     }
-
 
     setStatus('agent solving…', 'busy');
-
-    const solution = data.solution_moves;
-    const totalSteps = solution.length;
-
+    const total = data.solution_moves.length;
     const logLines = [];
-
-    for (let i = 0; i < totalSteps; i++) {
-
-      const move = solution[i];
-
-      const face = move[0];
-      const clockwise = !move.endsWith("'");
-
-      const step = i + 1;
-
-      stepLine.textContent =
-        `step ${step} / ${totalSteps}`;
-
-      // Update move log
-      logLines.push(
-        `<span class="tag">#${step}</span>${move}`
-      );
-
+    for (let i=0;i<total;i++){
+      const move = data.solution_moves[i];
+      const face = move[0], cw = !move.endsWith("'");
+      stepLine.textContent = `step ${i+1} / ${total}`;
+      logLines.push(`<span class="tag">#${i+1}</span>${move}`);
       moveLog.innerHTML = logLines.join('<br>');
       moveLog.scrollTop = moveLog.scrollHeight;
-
-
-      progressFill.style.width =
-        `${(step / totalSteps) * 100}%`;
-
-      console.log('Solution move:', move);
-
-      await rotateLayerVisual(
-        face,
-        clockwise,
-        500
-      );
+      progressFill.style.width = `${((i+1)/Math.max(total,1))*100}%`;
+      await rotateLayerVisual(face, cw, 500);
     }
 
-    setStatus(
-      `solved in ${totalSteps} moves`,
-      'good'
-    );
-
+    if (data.solved){
+      setStatus(`solved in ${total} moves`, 'good');
+    } else if (data.stuck){
+      setStatus('agent stuck in a loop — try again', 'bad');
+    } else {
+      setStatus('agent did not solve it — try again', 'bad');
+    }
     stepLine.textContent = '';
-
-  } catch (error) {
-
-    console.error('Visualizer error:', error);
-
-    setStatus(
-      'error loading solution',
-      'bad'
-    );
-
-    stepLine.textContent = error.message;
-
+  } catch (err){
+    setStatus('error: ' + err.message, 'bad');
   } finally {
-
     busy = false;
-    actionBtn.disabled = false;
-    actionBtn.textContent = 'Try again';
+    solveBtn.disabled = false; retrainBtn.disabled = false;
+    solveBtn.textContent = 'Scramble & solve';
   }
 }
 
-actionBtn.addEventListener(
-  'click',
-  runFromJSON
-);
+async function runRetrain(){
+  if (busy) return;
+  busy = true;
+  solveBtn.disabled = true; retrainBtn.disabled = true;
+  retrainBtn.textContent = 'Retraining…';
+  setStatus('retraining from scratch…', 'busy');
+  progressFill.style.width = '0%';
 
+  const t0 = Date.now();
+  const timer = setInterval(()=>{
+    stepLine.textContent = `${((Date.now()-t0)/1000).toFixed(0)}s elapsed`;
+    progressFill.style.width = Math.min(95, (Date.now()-t0)/600) + '%';
+  }, 400);
 
+  try {
+    const res = await fetch('/retrain', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || ('server error ' + res.status));
+    renderDepthTable(data.depth_results || {});
+    progressFill.style.width = '100%';
+    setStatus('retrained — ready', 'good');
+  } catch (err){
+    setStatus('error: ' + err.message, 'bad');
+  } finally {
+    clearInterval(timer);
+    stepLine.textContent = '';
+    busy = false;
+    solveBtn.disabled = false; retrainBtn.disabled = false;
+    retrainBtn.textContent = 'Retrain agent (~30-70s)';
+  }
+}
+
+solveBtn.addEventListener('click', runSolve);
+retrainBtn.addEventListener('click', runRetrain);
+
+(async function init(){
+  try {
+    const data = await refreshStatus();
+    setStatus(data.training ? 'server is training…' : 'ready', data.training ? 'busy' : 'good');
+  } catch (err){
+    setStatus('cannot reach server — run python server.py', 'bad');
+  }
+  solveBtn.disabled = false;
+  retrainBtn.disabled = false;
+})();
 
 })();
 </script>
