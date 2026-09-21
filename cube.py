@@ -1,16 +1,7 @@
 """
-cube.py -- A from-scratch Rubik's Cube environment for RL experiments.
-
-Supports the 2x2 (corners only) and 3x3 (corners + edges + centers) cubes,
-using a 3D-coordinate cubie representation rather than a hand-copied
-permutation table. Each small cubie lives at an integer coordinate
-(x, y, z) with entries in {-1, 0, 1}, and carries a dict of
-{outward_direction: face_color} stickers. A face turn is just a 90-degree
-rotation, about one axis, applied to every cubie in that layer -- both its
-position and the directions its stickers point. This makes the logic easy
-to verify: turning a face 4 times, or a move followed by its inverse, must
-always return the cube to its starting state (see the self-tests at the
-bottom of this file).
+Rubik's Cube environment.
+It is designed for 2x2 and 3x3 cube. This project sofar only contains RL of a 2x2 cube.
+The file can be tested by directly running it. Details for testing is at the end
 """
 from __future__ import annotations
 import random
