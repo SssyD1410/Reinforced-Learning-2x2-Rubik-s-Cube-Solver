@@ -1,21 +1,3 @@
-"""
-q_learning_2x2.py -- Phase 2: tabular Q-learning on the 2x2 cube.
-
-This is deliberately the "easy mode" version of the project: the 2x2 cube
-has only 8 corner pieces (~3.6M reachable states) so a plain dict-based
-Q-table can learn it, no neural network required.
-
-The key trick that makes RL tractable here is CURRICULUM SCRAMBLING:
-instead of starting every episode from a fully scrambled cube (where reward
-is so sparse the agent would basically never solve it by chance), we start
-from a cube that is only `depth` random moves away from solved, and slowly
-increase `depth` as the agent masters each level. This still counts as
-model-free RL -- the agent only ever sees (state, reward, next_state), no
-labels -- but it gives it a learnable path from "trivial" to "hard".
-
-Run this file directly to train an agent and see solve-rate progress
-printed per curriculum depth.
-"""
 import random
 from collections import defaultdict
 
