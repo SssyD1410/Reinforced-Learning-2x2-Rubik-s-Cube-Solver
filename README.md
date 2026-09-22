@@ -23,3 +23,5 @@ There are few ways to increase success rate, but it takes longer time and/or big
 Increase max_episodes_per_depth (e.g. to 100,000+) s
 Decrease success_threshold slightly for deep levels
 Increase the steps, e.g. max_steps = depth + 10
+
+<img width="964" height="832" alt="Demo" src="https://github.com/user-attachments/assets/0ae8399e-7ed0-478c-a557-37630be40c8d" />
